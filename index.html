@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#111827" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="T-V拟合" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>T-V / V-T 线性拟合</title>
+  <style>
+    :root {
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --accent: #111827;
+      --accent-2: #2563eb;
+      --danger: #dc2626;
+      --ok: #047857;
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 18px;
+      padding-bottom: calc(18px + env(safe-area-inset-bottom));
+    }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 24px; line-height: 1.2; margin: 8px 0 4px; }
+    .sub { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin: 12px 0;
+      box-shadow: 0 6px 18px rgba(0,0,0,.05);
+    }
+    h2 { font-size: 17px; margin: 0 0 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 4px; text-align: left; }
+    th { font-size: 13px; color: var(--muted); font-weight: 600; }
+    td:first-child, th:first-child { width: 42px; color: var(--muted); font-size: 13px; }
+    input, select, button {
+      width: 100%;
+      font: inherit;
+      border-radius: 12px;
+      border: 1px solid #d1d5db;
+      padding: 12px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+    }
+    input:focus, select:focus { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(37,99,235,.14); }
+    .buttons { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 12px; }
+    button {
+      border: 0;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    button.secondary { background: #e5e7eb; color: var(--text); }
+    button.blue { background: var(--accent-2); }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    @media (min-width: 650px) { .grid.two { grid-template-columns: 1fr 1fr; } }
+    .result {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      background: #f9fafb;
+      min-height: 84px;
+    }
+    .label { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .formula { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; word-break: break-all; }
+    .small { font-size: 13px; color: var(--muted); margin-top: 6px; }
+    .answer {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 14px;
+      background: #ecfdf5;
+      color: var(--ok);
+      font-weight: 750;
+      word-break: break-all;
+    }
+    .error {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 14px;
+      background: #fef2f2;
+      color: var(--danger);
+      font-weight: 650;
+    }
+    .hint { font-size: 13px; color: var(--muted); line-height: 1.55; }
+    .foot { color: var(--muted); font-size: 12px; text-align: center; margin: 18px 0 4px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>T-V / V-T 线性拟合</h1>
+    <p class="sub">输入 2~5 组温度与电压，自动生成 T=f(V) 与 V=f(T) 两条线性拟合式。</p>
+
+    <section class="card">
+      <h2>1. 输入数据</h2>
+      <table>
+        <thead>
+          <tr><th>#</th><th>温度 T</th><th>电压 V</th></tr>
+        </thead>
+        <tbody id="dataRows"></tbody>
+      </table>
+      <div class="buttons">
+        <button class="blue" onclick="fitAll()">拟合</button>
+        <button class="secondary" onclick="loadExample()">示例</button>
+        <button class="secondary" onclick="clearAll()">清空</button>
+      </div>
+      <div id="inputMsg"></div>
+    </section>
+
+    <section class="card">
+      <h2>2. 拟合结果</h2>
+      <div class="grid two">
+        <div class="result">
+          <div class="label">函数 A：温度由电压预测</div>
+          <div class="formula" id="fitTV">未拟合</div>
+          <div class="small" id="fitTVR2"></div>
+        </div>
+        <div class="result">
+          <div class="label">函数 B：电压由温度预测</div>
+          <div class="formula" id="fitVT">未拟合</div>
+          <div class="small" id="fitVTR2"></div>
+        </div>
+      </div>
+      <p class="hint">说明：A 与 B 是分别以不同变量作为因变量做最小二乘拟合，通常不应强行认为二者严格互逆。</p>
+    </section>
+
+    <section class="card">
+      <h2>3. 反推计算</h2>
+      <div class="grid two">
+        <div>
+          <div class="label">选择使用的函数式</div>
+          <select id="formulaSelect">
+            <option value="TV">函数 A：T = aV + b</option>
+            <option value="VT">函数 B：V = cT + d</option>
+          </select>
+        </div>
+        <div>
+          <div class="label">已知量类型</div>
+          <select id="knownType">
+            <option value="T">已知温度 T，求电压 V</option>
+            <option value="V">已知电压 V，求温度 T</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:10px;">
+        <div class="label">输入已知值</div>
+        <input id="knownValue" type="number" step="any" placeholder="例如：25 或 4.78" />
+      </div>
+      <div class="buttons" style="grid-template-columns: 1fr;">
+        <button onclick="calcReverse()">计算</button>
+      </div>
+      <div id="calcMsg"></div>
+    </section>
+
+    <section class="card">
+      <h2>使用逻辑</h2>
+      <p class="hint">
+        至少填写 2 行完整数据。空行会被自动忽略。数据会保存在本机浏览器 localStorage 中；本页面没有服务器计算逻辑，也不会主动上传你的测试数据。
+      </p>
+    </section>
+
+    <div class="foot">T-V / V-T Fit Web App</div>
+  </div>
+
+<script>
+  const MAX_ROWS = 5;
+  let fitTV = null; // T = aV + b, x=V,y=T
+  let fitVT = null; // V = cT + d, x=T,y=V
+
+  function fmt(n) {
+    if (!Number.isFinite(n)) return "NaN";
+    const abs = Math.abs(n);
+    if (abs !== 0 && (abs < 1e-4 || abs >= 1e6)) return n.toExponential(6);
+    return Number(n.toFixed(8)).toString();
+  }
+
+  function initRows() {
+    const tbody = document.getElementById("dataRows");
+    tbody.innerHTML = "";
+    for (let i = 0; i < MAX_ROWS; i++) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${i + 1}</td>
+        <td><input id="t${i}" type="number" step="any" inputmode="decimal" placeholder="T${i + 1}" oninput="saveInputs()"></td>
+        <td><input id="v${i}" type="number" step="any" inputmode="decimal" placeholder="V${i + 1}" oninput="saveInputs()"></td>
+      `;
+      tbody.appendChild(tr);
+    }
+    loadInputs();
+  }
+
+  function getPairs() {
+    const pairs = [];
+    for (let i = 0; i < MAX_ROWS; i++) {
+      const tRaw = document.getElementById(`t${i}`).value.trim();
+      const vRaw = document.getElementById(`v${i}`).value.trim();
+      if (tRaw === "" && vRaw === "") continue;
+      if (tRaw === "" || vRaw === "") throw new Error(`第 ${i + 1} 行温度和电压必须同时填写。`);
+      const t = Number(tRaw), v = Number(vRaw);
+      if (!Number.isFinite(t) || !Number.isFinite(v)) throw new Error(`第 ${i + 1} 行不是有效数字。`);
+      pairs.push({ t, v });
+    }
+    if (pairs.length < 2) throw new Error("至少需要 2 组完整数据才能拟合。");
+    return pairs;
+  }
+
+  function linearFit(x, y) {
+    const n = x.length;
+    const mx = x.reduce((a,b)=>a+b,0) / n;
+    const my = y.reduce((a,b)=>a+b,0) / n;
+    let sxx = 0, sxy = 0, sst = 0, sse = 0;
+    for (let i = 0; i < n; i++) {
+      sxx += (x[i] - mx) ** 2;
+      sxy += (x[i] - mx) * (y[i] - my);
+      sst += (y[i] - my) ** 2;
+    }
+    if (Math.abs(sxx) < 1e-15) throw new Error("自变量全部相同，无法拟合线性斜率。请检查数据。");
+    const k = sxy / sxx;
+    const b = my - k * mx;
+    for (let i = 0; i < n; i++) {
+      const yp = k * x[i] + b;
+      sse += (y[i] - yp) ** 2;
+    }
+    const r2 = Math.abs(sst) < 1e-15 ? 1 : 1 - sse / sst;
+    return { k, b, r2 };
+  }
+
+  function fitAll() {
+    const inputMsg = document.getElementById("inputMsg");
+    const calcMsg = document.getElementById("calcMsg");
+    inputMsg.innerHTML = "";
+    calcMsg.innerHTML = "";
+    try {
+      const pairs = getPairs();
+      const T = pairs.map(p => p.t);
+      const V = pairs.map(p => p.v);
+      fitTV = linearFit(V, T);
+      fitVT = linearFit(T, V);
+      document.getElementById("fitTV").textContent = `T = ${fmt(fitTV.k)} × V ${fitTV.b >= 0 ? "+" : "-"} ${fmt(Math.abs(fitTV.b))}`;
+      document.getElementById("fitTVR2").textContent = `R² = ${fmt(fitTV.r2)}`;
+      document.getElementById("fitVT").textContent = `V = ${fmt(fitVT.k)} × T ${fitVT.b >= 0 ? "+" : "-"} ${fmt(Math.abs(fitVT.b))}`;
+      document.getElementById("fitVTR2").textContent = `R² = ${fmt(fitVT.r2)}`;
+      inputMsg.innerHTML = `<div class="answer">已完成拟合：有效数据 ${pairs.length} 组。</div>`;
+      saveInputs();
+    } catch (err) {
+      fitTV = null;
+      fitVT = null;
+      inputMsg.innerHTML = `<div class="error">${err.message}</div>`;
+    }
+  }
+
+  function calcReverse() {
+    const calcMsg = document.getElementById("calcMsg");
+    calcMsg.innerHTML = "";
+    try {
+      if (!fitTV || !fitVT) fitAll();
+      if (!fitTV || !fitVT) throw new Error("请先完成拟合。");
+      const formula = document.getElementById("formulaSelect").value;
+      const knownType = document.getElementById("knownType").value;
+      const raw = document.getElementById("knownValue").value.trim();
+      if (raw === "") throw new Error("请输入已知值。");
+      const x = Number(raw);
+      if (!Number.isFinite(x)) throw new Error("已知值不是有效数字。");
+
+      let result, text;
+      if (formula === "TV") {
+        const { k, b } = fitTV; // T = kV + b
+        if (knownType === "V") {
+          result = k * x + b;
+          text = `由函数 A 计算：T = ${fmt(result)}`;
+        } else {
+          if (Math.abs(k) < 1e-15) throw new Error("函数 A 斜率接近 0，无法由 T 反推出 V。");
+          result = (x - b) / k;
+          text = `由函数 A 反解：V = ${fmt(result)}`;
+        }
+      } else {
+        const { k, b } = fitVT; // V = kT + b
+        if (knownType === "T") {
+          result = k * x + b;
+          text = `由函数 B 计算：V = ${fmt(result)}`;
+        } else {
+          if (Math.abs(k) < 1e-15) throw new Error("函数 B 斜率接近 0，无法由 V 反推出 T。");
+          result = (x - b) / k;
+          text = `由函数 B 反解：T = ${fmt(result)}`;
+        }
+      }
+      calcMsg.innerHTML = `<div class="answer">${text}</div>`;
+    } catch (err) {
+      calcMsg.innerHTML = `<div class="error">${err.message}</div>`;
+    }
+  }
+
+  function clearAll() {
+    for (let i = 0; i < MAX_ROWS; i++) {
+      document.getElementById(`t${i}`).value = "";
+      document.getElementById(`v${i}`).value = "";
+    }
+    fitTV = null;
+    fitVT = null;
+    document.getElementById("fitTV").textContent = "未拟合";
+    document.getElementById("fitTVR2").textContent = "";
+    document.getElementById("fitVT").textContent = "未拟合";
+    document.getElementById("fitVTR2").textContent = "";
+    document.getElementById("inputMsg").innerHTML = "";
+    document.getElementById("calcMsg").innerHTML = "";
+    localStorage.removeItem("tvvt_inputs");
+  }
+
+  function loadExample() {
+    const sample = [
+      {t: 25, v: 4.78},
+      {t: 50, v: 4.62},
+      {t: 75, v: 4.45},
+      {t: 100, v: 4.30},
+      {t: 125, v: 4.12}
+    ];
+    clearAll();
+    sample.forEach((p, i) => {
+      document.getElementById(`t${i}`).value = p.t;
+      document.getElementById(`v${i}`).value = p.v;
+    });
+    saveInputs();
+    fitAll();
+  }
+
+  function saveInputs() {
+    const rows = [];
+    for (let i = 0; i < MAX_ROWS; i++) {
+      rows.push({ t: document.getElementById(`t${i}`).value, v: document.getElementById(`v${i}`).value });
+    }
+    localStorage.setItem("tvvt_inputs", JSON.stringify(rows));
+  }
+
+  function loadInputs() {
+    try {
+      const rows = JSON.parse(localStorage.getItem("tvvt_inputs") || "[]");
+      rows.slice(0, MAX_ROWS).forEach((p, i) => {
+        document.getElementById(`t${i}`).value = p.t || "";
+        document.getElementById(`v${i}`).value = p.v || "";
+      });
+      if (rows.some(p => p.t && p.v)) fitAll();
+    } catch (_) {}
+  }
+
+  initRows();
+</script>
+</body>
+</html>
